@@ -71,6 +71,7 @@ class StockMarketGUI:
         
     def get_stock_data(self, symbol, period):
         try:
+            
             stock = yf.Ticker(symbol)
             data = stock.history(period=period)
             
@@ -94,7 +95,7 @@ class StockMarketGUI:
             return data, company_info
         except Exception as e:
             messagebox.showerror("Error", f"Error fetching data for {symbol}: {str(e)}")
-            return None
+            return None, None
     
     def calculate_indicators(self, data):
         # Calculate SMA and Bollinger Bands
