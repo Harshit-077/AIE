@@ -13,19 +13,27 @@ class StockMarketGUI:
         self.root.title("Stock Market Analysis")
         self.root.geometry("1200x800")
         
+        # Theme and styling
+        self.style = ttk.Style()
+        self.is_dark_theme = False
+        
         # Fixed USD to INR conversion rate
         self.usd_to_inr = 83.0  # Using a fixed rate
         self.current_symbol = ""
         self.update_interval = 60000  # Update every 60 seconds
         
         # Create main frames
-        self.input_frame = ttk.Frame(root, padding="10")
-        self.input_frame.pack(fill=tk.X)
+        self.input_frame = ttk.Frame(root, padding="10", style='Card.TFrame')
+        self.input_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        self.title_frame = ttk.Frame(root, padding="5")
-        self.title_frame.pack(fill=tk.X)
-        self.company_name_label = ttk.Label(self.title_frame, text="", font=("Helvetica", 16, "bold"))
+        self.title_frame = ttk.Frame(root, padding="5", style='Card.TFrame')
+        self.title_frame.pack(fill=tk.X, padx=10, pady=5)
+        self.company_name_label = ttk.Label(self.title_frame, text="", font=("Helvetica", 16, "bold"), style='Title.TLabel')
         self.company_name_label.pack()
+        
+        # Theme toggle button
+        self.theme_button = ttk.Button(self.input_frame, text="🌙", width=3, command=self.toggle_theme)
+        self.theme_button.pack(side=tk.RIGHT, padx=5)
         
         self.content_frame = ttk.Frame(root, padding="10")
         self.content_frame.pack(fill=tk.BOTH, expand=True)
@@ -42,7 +50,8 @@ class StockMarketGUI:
                                   width=5)
         period_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(self.input_frame, text="Analyze", command=self.analyze_stock).pack(side=tk.LEFT, padx=10)
+        analyze_button = ttk.Button(self.input_frame, text="Analyze", command=self.analyze_stock, style='Accent.TButton')
+        analyze_button.pack(side=tk.LEFT, padx=10)
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.content_frame)
@@ -61,8 +70,58 @@ class StockMarketGUI:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
         # Initialize indicators display
-        self.indicators_text = tk.Text(self.indicators_tab, wrap=tk.WORD, height=20)
-        self.indicators_text.pack(fill=tk.BOTH, expand=True)
+        self.indicators_text = tk.Text(self.indicators_tab, wrap=tk.WORD, height=20, font=("Helvetica", 11))
+        self.indicators_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Apply initial theme after all widgets are created
+        self.setup_theme()
+        
+    def setup_theme(self):
+        # Light theme colors
+        self.light_theme = {
+            'bg': '#ffffff',
+            'fg': '#333333',
+            'accent': '#007bff',
+            'card': '#f8f9fa'
+        }
+        
+        # Dark theme colors
+        self.dark_theme = {
+            'bg': '#1a1a1a',
+            'fg': '#ffffff',
+            'accent': '#0d6efd',
+            'card': '#2d2d2d'
+        }
+        
+        # Apply initial theme
+        self.apply_theme(self.light_theme)
+    
+    def apply_theme(self, theme):
+        self.style.configure('TFrame', background=theme['bg'])
+        self.style.configure('Card.TFrame', background=theme['card'])
+        self.style.configure('TLabel', background=theme['bg'], foreground=theme['fg'])
+        self.style.configure('Title.TLabel', background=theme['card'], foreground=theme['fg'])
+        self.style.configure('TButton', background=theme['bg'], foreground=theme['fg'])
+        self.style.configure('Accent.TButton', background=theme['accent'], foreground='white')
+        
+        self.root.configure(bg=theme['bg'])
+        self.indicators_text.configure(bg=theme['card'], fg=theme['fg'], insertbackground=theme['fg'])
+        
+        # Update chart colors
+        if hasattr(self, 'figure'):
+            self.figure.set_facecolor(theme['bg'])
+            for ax in self.figure.get_axes():
+                ax.set_facecolor(theme['bg'])
+                ax.tick_params(colors=theme['fg'])
+                ax.xaxis.label.set_color(theme['fg'])
+                ax.yaxis.label.set_color(theme['fg'])
+                ax.title.set_color(theme['fg'])
+            self.canvas.draw()
+    
+    def toggle_theme(self):
+        self.is_dark_theme = not self.is_dark_theme
+        self.theme_button.configure(text='☀️' if self.is_dark_theme else '🌙')
+        self.apply_theme(self.dark_theme if self.is_dark_theme else self.light_theme)
         
     def get_stock_data(self, symbol, period):
         try:
@@ -92,8 +151,11 @@ class StockMarketGUI:
             return None
     
     def calculate_indicators(self, data):
-        # Calculate SMA
+        # Calculate SMA and Bollinger Bands
         sma_20 = data['Close'].rolling(window=20).mean()
+        std_dev = data['Close'].rolling(window=20).std()
+        bollinger_upper = sma_20 + (std_dev * 2)
+        bollinger_lower = sma_20 - (std_dev * 2)
         
         # Calculate RSI
         delta = data['Close'].diff()
@@ -108,19 +170,24 @@ class StockMarketGUI:
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
         
-        return sma_20, rsi, macd, signal
+        return sma_20, rsi, macd, signal, bollinger_upper, bollinger_lower
     
     def plot_chart(self, data):
         self.figure.clear()
         
         # Create price subplot
         ax1 = self.figure.add_subplot(211)
-        ax1.plot(data.index, data['Close'], label='Close Price')
-        ax1.set_title('Stock Price')
+        ax1.plot(data.index, data['Close'], label='Close Price', color='blue', linewidth=1.5)
+        sma_20, _, _, _, bollinger_upper, bollinger_lower = self.calculate_indicators(data)
+        ax1.plot(data.index, sma_20, label='SMA (20)', color='orange', linestyle='--', alpha=0.7)
+        ax1.plot(data.index, bollinger_upper, label='Bollinger Upper', color='green', linestyle=':', alpha=0.5)
+        ax1.plot(data.index, bollinger_lower, label='Bollinger Lower', color='red', linestyle=':', alpha=0.5)
+        ax1.fill_between(data.index, bollinger_upper, bollinger_lower, alpha=0.1, color='gray')
+        ax1.set_title('Stock Price with Bollinger Bands')
         ax1.set_xlabel('Date')
         ax1.set_ylabel('Price')
-        ax1.grid(True)
-        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc='upper left')
         
         # Create volume subplot
         ax2 = self.figure.add_subplot(212)
@@ -139,7 +206,7 @@ class StockMarketGUI:
             self.indicators_text.insert(tk.END, "Insufficient data to calculate indicators")
             return
             
-        sma_20, rsi, macd, signal = self.calculate_indicators(data)
+        sma_20, rsi, macd, signal, bollinger_upper, bollinger_lower = self.calculate_indicators(data)
         
         current_price = data['Close'].iloc[-1]
         prev_close = data['Close'].iloc[-2]
@@ -150,6 +217,9 @@ class StockMarketGUI:
 
 """
         indicators_text += f"SMA (20): ₹{sma_20.iloc[-1]:.2f}"
+        indicators_text += f"\nBollinger Bands:"
+        indicators_text += f"\n  Upper: ₹{bollinger_upper.iloc[-1]:.2f}"
+        indicators_text += f"\n  Lower: ₹{bollinger_lower.iloc[-1]:.2f}"
         indicators_text += " (Bullish)" if current_price > sma_20.iloc[-1] else " (Bearish)"
         
         indicators_text += f"\n\nRSI (14): {rsi.iloc[-1]:.2f}"
