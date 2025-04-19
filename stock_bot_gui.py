@@ -13,27 +13,19 @@ class StockMarketGUI:
         self.root.title("Stock Market Analysis")
         self.root.geometry("1200x800")
         
-        # Theme and styling
-        self.style = ttk.Style()
-        self.is_dark_theme = False
-        
         # Fixed USD to INR conversion rate
         self.usd_to_inr = 83.0  # Using a fixed rate
         self.current_symbol = ""
         self.update_interval = 60000  # Update every 60 seconds
         
         # Create main frames
-        self.input_frame = ttk.Frame(root, padding="10", style='Card.TFrame')
+        self.input_frame = ttk.Frame(root, padding="10")
         self.input_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        self.title_frame = ttk.Frame(root, padding="5", style='Card.TFrame')
+        self.title_frame = ttk.Frame(root, padding="5")
         self.title_frame.pack(fill=tk.X, padx=10, pady=5)
-        self.company_name_label = ttk.Label(self.title_frame, text="", font=("Helvetica", 16, "bold"), style='Title.TLabel')
+        self.company_name_label = ttk.Label(self.title_frame, text="", font=("Helvetica", 16, "bold"))
         self.company_name_label.pack()
-        
-        # Theme toggle button
-        self.theme_button = ttk.Button(self.input_frame, text="🌙", width=3, command=self.toggle_theme)
-        self.theme_button.pack(side=tk.RIGHT, padx=5)
         
         self.content_frame = ttk.Frame(root, padding="10")
         self.content_frame.pack(fill=tk.BOTH, expand=True)
@@ -50,7 +42,7 @@ class StockMarketGUI:
                                   width=5)
         period_combo.pack(side=tk.LEFT, padx=5)
         
-        analyze_button = ttk.Button(self.input_frame, text="Analyze", command=self.analyze_stock, style='Accent.TButton')
+        analyze_button = ttk.Button(self.input_frame, text="Analyze", command=self.analyze_stock)
         analyze_button.pack(side=tk.LEFT, padx=10)
         
         # Create notebook for tabs
@@ -73,55 +65,9 @@ class StockMarketGUI:
         self.indicators_text = tk.Text(self.indicators_tab, wrap=tk.WORD, height=20, font=("Helvetica", 11))
         self.indicators_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Apply initial theme after all widgets are created
-        self.setup_theme()
+        # Remove theme setup call
         
-    def setup_theme(self):
-        # Light theme colors
-        self.light_theme = {
-            'bg': '#ffffff',
-            'fg': '#333333',
-            'accent': '#007bff',
-            'card': '#f8f9fa'
-        }
-        
-        # Dark theme colors
-        self.dark_theme = {
-            'bg': '#1a1a1a',
-            'fg': '#ffffff',
-            'accent': '#0d6efd',
-            'card': '#2d2d2d'
-        }
-        
-        # Apply initial theme
-        self.apply_theme(self.light_theme)
-    
-    def apply_theme(self, theme):
-        self.style.configure('TFrame', background=theme['bg'])
-        self.style.configure('Card.TFrame', background=theme['card'])
-        self.style.configure('TLabel', background=theme['bg'], foreground=theme['fg'])
-        self.style.configure('Title.TLabel', background=theme['card'], foreground=theme['fg'])
-        self.style.configure('TButton', background=theme['bg'], foreground=theme['fg'])
-        self.style.configure('Accent.TButton', background=theme['accent'], foreground='white')
-        
-        self.root.configure(bg=theme['bg'])
-        self.indicators_text.configure(bg=theme['card'], fg=theme['fg'], insertbackground=theme['fg'])
-        
-        # Update chart colors
-        if hasattr(self, 'figure'):
-            self.figure.set_facecolor(theme['bg'])
-            for ax in self.figure.get_axes():
-                ax.set_facecolor(theme['bg'])
-                ax.tick_params(colors=theme['fg'])
-                ax.xaxis.label.set_color(theme['fg'])
-                ax.yaxis.label.set_color(theme['fg'])
-                ax.title.set_color(theme['fg'])
-            self.canvas.draw()
-    
-    def toggle_theme(self):
-        self.is_dark_theme = not self.is_dark_theme
-        self.theme_button.configure(text='☀️' if self.is_dark_theme else '🌙')
-        self.apply_theme(self.dark_theme if self.is_dark_theme else self.light_theme)
+
         
     def get_stock_data(self, symbol, period):
         try:
@@ -130,7 +76,7 @@ class StockMarketGUI:
             
             if data.empty:
                 messagebox.showerror("Error", f"No data available for {symbol}")
-                return None
+                return None, None
                 
             if len(data) < 26:  # Minimum required for MACD calculation
                 messagebox.showwarning("Warning", f"Insufficient historical data for {symbol}. Some indicators may not be accurate.")
@@ -141,11 +87,11 @@ class StockMarketGUI:
             data['High'] = data['High'] * self.usd_to_inr
             data['Low'] = data['Low'] * self.usd_to_inr
             
-            # Get company name
+            # Get company info
             company_info = stock.info
             company_name = company_info.get('longName', symbol)
             self.company_name_label.config(text=company_name)
-            return data
+            return data, company_info
         except Exception as e:
             messagebox.showerror("Error", f"Error fetching data for {symbol}: {str(e)}")
             return None
@@ -200,7 +146,7 @@ class StockMarketGUI:
         self.figure.tight_layout()
         self.canvas.draw()
     
-    def update_indicators(self, data):
+    def update_indicators(self, data, company_info):
         if len(data) < 2:
             self.indicators_text.delete(1.0, tk.END)
             self.indicators_text.insert(tk.END, "Insufficient data to calculate indicators")
@@ -212,10 +158,19 @@ class StockMarketGUI:
         prev_close = data['Close'].iloc[-2]
         price_change = ((current_price - prev_close) / prev_close) * 100
         
-        # Format indicators text
-        indicators_text = f"""Current Price: ₹{current_price:.2f} ({price_change:+.2f}%)
-
-"""
+        # Format company information
+        indicators_text = "Company Information:\n"
+        indicators_text += f"Sector: {company_info.get('sector', 'N/A')}\n"
+        indicators_text += f"Industry: {company_info.get('industry', 'N/A')}\n"
+        indicators_text += f"Market Cap: ₹{company_info.get('marketCap', 0) * self.usd_to_inr:,.2f}\n"
+        indicators_text += f"52 Week High: ₹{company_info.get('fiftyTwoWeekHigh', 0) * self.usd_to_inr:,.2f}\n"
+        indicators_text += f"52 Week Low: ₹{company_info.get('fiftyTwoWeekLow', 0) * self.usd_to_inr:,.2f}\n"
+        indicators_text += f"P/E Ratio: {company_info.get('trailingPE', 'N/A')}\n"
+        indicators_text += f"Dividend Yield: {company_info.get('dividendYield', 0) * 100:.2f}%\n"
+        indicators_text += f"Average Volume: {company_info.get('averageVolume', 0):,}\n\n"
+        
+        # Price and Technical Indicators
+        indicators_text += f"Current Price: ₹{current_price:.2f} ({price_change:+.2f}%)\n"
         indicators_text += f"SMA (20): ₹{sma_20.iloc[-1]:.2f}"
         indicators_text += f"\nBollinger Bands:"
         indicators_text += f"\n  Upper: ₹{bollinger_upper.iloc[-1]:.2f}"
@@ -232,6 +187,16 @@ class StockMarketGUI:
         
         indicators_text += f"\n\nMACD: {macd.iloc[-1]:.2f}"
         indicators_text += " (Bullish Signal)" if macd.iloc[-1] > signal.iloc[-1] else " (Bearish Signal)"
+        
+        # Add trading volume analysis
+        avg_volume = data['Volume'].mean()
+        current_volume = data['Volume'].iloc[-1]
+        volume_ratio = (current_volume / avg_volume) * 100
+        
+        indicators_text += f"\n\nVolume Analysis:"
+        indicators_text += f"\nCurrent Volume: {current_volume:,.0f}"
+        indicators_text += f"\nAverage Volume: {avg_volume:,.0f}"
+        indicators_text += f"\nVolume Ratio: {volume_ratio:.1f}% of Average"
         
         self.indicators_text.delete(1.0, tk.END)
         self.indicators_text.insert(tk.END, indicators_text)
@@ -251,10 +216,10 @@ class StockMarketGUI:
             return
         
         self.current_symbol = symbol
-        data = self.get_stock_data(symbol, self.period_var.get())
+        data, company_info = self.get_stock_data(symbol, self.period_var.get())
         if data is not None and not data.empty:
             self.plot_chart(data)
-            self.update_indicators(data)
+            self.update_indicators(data, company_info)
         
 
 def main():
